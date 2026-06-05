@@ -1,116 +1,116 @@
+﻿using System;
 using Stateless;
 
-namespace BugPro;
-
-public sealed class Bug
+namespace BugPro
 {
     public enum State
     {
-        New,
-        Triaged,
-        Fixing,
-        NeedMoreInfo,
-        NotABug,
-        WontFix,
-        Duplicate,
-        CannotReproduce,
-        Closed
+        Open,
+        InAnalysis,
+        InProgress,
+        MarkAsResolvedd,
+        Closed,
+        Reopened,
+        Rejected,
+        Deferred
     }
 
     public enum Trigger
     {
         StartAnalysis,
-        AcceptForFix,
-        RequestMoreInfo,
-        ProvideMoreInfo,
-        ResolveAsNotABug,
-        ResolveAsWontFix,
-        ResolveAsDuplicate,
-        ResolveAsCannotReproduce,
-        ConfirmByTester,
-        ReturnToTriage,
-        CompleteFix,
+        AssignToTeam,
+        MarkAsResolved,
+        Confirm,
+        ReStartAnalysis,
+        Reject,
+        Defer,
+        Resume,
         Reopen
     }
 
-    private readonly StateMachine<State, Trigger> _stateMachine;
-
-    public Bug()
+    public class Bug
     {
-        _stateMachine = new StateMachine<State, Trigger>(State.New);
+        public const int MaxReopen = 3;
 
-        _stateMachine.Configure(State.New)
-            .Permit(Trigger.StartAnalysis, State.Triaged);
+        private readonly StateMachine<State, Trigger> _machine;
+        private int _reopenCount;
 
-        _stateMachine.Configure(State.Triaged)
-            .Permit(Trigger.AcceptForFix, State.Fixing)
-            .Permit(Trigger.RequestMoreInfo, State.NeedMoreInfo)
-            .Permit(Trigger.ResolveAsNotABug, State.NotABug)
-            .Permit(Trigger.ResolveAsWontFix, State.WontFix)
-            .Permit(Trigger.ResolveAsDuplicate, State.Duplicate)
-            .Permit(Trigger.ResolveAsCannotReproduce, State.CannotReproduce);
+        public Bug()
+        {
+            _machine = new StateMachine<State, Trigger>(State.Open);
 
-        _stateMachine.Configure(State.Fixing)
-            .Permit(Trigger.RequestMoreInfo, State.NeedMoreInfo)
-            .Permit(Trigger.CompleteFix, State.Closed)
-            .Permit(Trigger.ReturnToTriage, State.Triaged);
+            _machine.Configure(State.Open)
+                .Permit(Trigger.StartAnalysis, State.InAnalysis);
 
-        _stateMachine.Configure(State.NeedMoreInfo)
-            .Permit(Trigger.ProvideMoreInfo, State.Fixing);
+            _machine.Configure(State.InAnalysis)
+                .Permit(Trigger.AssignToTeam, State.InProgress)
+                .Permit(Trigger.Defer, State.Deferred)
+                .Permit(Trigger.Reject, State.Rejected);
 
-        _stateMachine.Configure(State.NotABug)
-            .Permit(Trigger.ConfirmByTester, State.Closed)
-            .Permit(Trigger.ReturnToTriage, State.Triaged);
+            _machine.Configure(State.InProgress)
+                .Permit(Trigger.MarkAsResolved, State.MarkAsResolvedd)
+                .Permit(Trigger.ReStartAnalysis, State.InAnalysis);
 
-        _stateMachine.Configure(State.WontFix)
-            .Permit(Trigger.ConfirmByTester, State.Closed)
-            .Permit(Trigger.ReturnToTriage, State.Triaged);
+            _machine.Configure(State.MarkAsResolvedd)
+                .Permit(Trigger.Confirm, State.Closed)
+                .Permit(Trigger.ReStartAnalysis, State.InAnalysis);
 
-        _stateMachine.Configure(State.Duplicate)
-            .Permit(Trigger.ConfirmByTester, State.Closed)
-            .Permit(Trigger.ReturnToTriage, State.Triaged);
+            _machine.Configure(State.Deferred)
+                .Permit(Trigger.Resume, State.InAnalysis);
 
-        _stateMachine.Configure(State.CannotReproduce)
-            .Permit(Trigger.ConfirmByTester, State.Closed)
-            .Permit(Trigger.ReturnToTriage, State.Triaged);
+            _machine.Configure(State.Closed)
+                .PermitIf(Trigger.Reopen, State.Reopened, () => _reopenCount < MaxReopen);
 
-        _stateMachine.Configure(State.Closed)
-            .Permit(Trigger.Reopen, State.Triaged);
+            _machine.Configure(State.Rejected)
+                .PermitIf(Trigger.Reopen, State.Reopened, () => _reopenCount < MaxReopen);
+
+            _machine.Configure(State.Reopened)
+                .OnEntry(() => _reopenCount++)
+                .Permit(Trigger.StartAnalysis, State.InAnalysis);
+        }
+
+        public State CurrentState => _machine.State;
+
+        public int ReopenCount => _reopenCount;
+
+        public bool CanExecute(Trigger trigger) => _machine.CanExecute(trigger);
+
+        public void StartAnalysis() => _machine.Fire(Trigger.StartAnalysis);
+        public void AssignToTeam() => _machine.Fire(Trigger.AssignToTeam);
+        public void MarkAsResolved() => _machine.Fire(Trigger.MarkAsResolved);
+        public void Confirm() => _machine.Fire(Trigger.Confirm);
+        public void ReStartAnalysis() => _machine.Fire(Trigger.ReStartAnalysis);
+        public void Reject() => _machine.Fire(Trigger.Reject);
+        public void Defer() => _machine.Fire(Trigger.Defer);
+        public void Resume() => _machine.Fire(Trigger.Resume);
+        public void Reopen() => _machine.Fire(Trigger.Reopen);
     }
 
-    public State CurrentState => _stateMachine.State;
-
-    public void Fire(Trigger trigger) => _stateMachine.Fire(trigger);
-
-    public IReadOnlyCollection<Trigger> GetPermittedTriggers() => _stateMachine.PermittedTriggers.ToArray();
-}
-
-internal static class Program
-{
-    private static void Main()
+    public static class Program
     {
-        var bug = new Bug();
+        public static void Main()
+        {
+            var bug = new Bug();
+            Console.WriteLine($"Start: {bug.CurrentState}");
 
-        Console.WriteLine("Bug workflow demo");
-        PrintState(bug, "Создан новый дефект");
+            bug.StartAnalysis();
+            Console.WriteLine($"After StartAnalysis: {bug.CurrentState}");
 
-        bug.Fire(Bug.Trigger.StartAnalysis);
-        PrintState(bug, "Продуктовая команда взяла дефект в разбор");
+            bug.AssignToTeam();
+            Console.WriteLine($"After AssignToTeam: {bug.CurrentState}");
 
-        bug.Fire(Bug.Trigger.AcceptForFix);
-        PrintState(bug, "Разработчик начал исправление");
+            bug.MarkAsResolved();
+            Console.WriteLine($"After MarkAsResolved: {bug.CurrentState}");
 
-        bug.Fire(Bug.Trigger.CompleteFix);
-        PrintState(bug, "Исправление завершено");
+            bug.Confirm();
+            Console.WriteLine($"After Confirm: {bug.CurrentState}");
 
-        bug.Fire(Bug.Trigger.Reopen);
-        PrintState(bug, "Тестировщик переоткрыл дефект");
+            bug.Reopen();
+            Console.WriteLine($"After Reopen: {bug.CurrentState} " +
+                              $"(reopened {bug.ReopenCount} time(s))");
 
-        Console.WriteLine("Доступные переходы: " + string.Join(", ", bug.GetPermittedTriggers()));
-    }
-
-    private static void PrintState(Bug bug, string action)
-    {
-        Console.WriteLine($"{action}: {bug.CurrentState}");
+            bug.StartAnalysis();
+            Console.WriteLine($"After StartAnalysis: {bug.CurrentState}");
+        }
     }
 }
