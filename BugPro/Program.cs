@@ -32,85 +32,85 @@ namespace BugPro
     {
         public const int MaxReopen = 3;
 
-        private readonly StateMachine<State, Trigger> _machine;
-        private int _reopenCount;
+        private readonly StateMachine<State, Trigger> _stateMachine;
+        private int _reopenCounter;
 
         public Bug()
         {
-            _machine = new StateMachine<State, Trigger>(State.Open);
+            _stateMachine = new StateMachine<State, Trigger>(State.Open);
 
-            _machine.Configure(State.Open)
+            _stateMachine.Configure(State.Open)
                 .Permit(Trigger.StartAnalysis, State.InAnalysis);
 
-            _machine.Configure(State.InAnalysis)
+            _stateMachine.Configure(State.InAnalysis)
                 .Permit(Trigger.AssignToTeam, State.InProgress)
                 .Permit(Trigger.Defer, State.Deferred)
                 .Permit(Trigger.Reject, State.Rejected);
 
-            _machine.Configure(State.InProgress)
+            _stateMachine.Configure(State.InProgress)
                 .Permit(Trigger.MarkAsResolved, State.MarkAsResolvedd)
                 .Permit(Trigger.ReStartAnalysis, State.InAnalysis);
 
-            _machine.Configure(State.MarkAsResolvedd)
+            _stateMachine.Configure(State.MarkAsResolvedd)
                 .Permit(Trigger.Confirm, State.Closed)
                 .Permit(Trigger.ReStartAnalysis, State.InAnalysis);
 
-            _machine.Configure(State.Deferred)
+            _stateMachine.Configure(State.Deferred)
                 .Permit(Trigger.Resume, State.InAnalysis);
 
-            _machine.Configure(State.Closed)
-                .PermitIf(Trigger.Reopen, State.Reopened, () => _reopenCount < MaxReopen);
+            _stateMachine.Configure(State.Closed)
+                .PermitIf(Trigger.Reopen, State.Reopened, () => _reopenCounter < MaxReopen);
 
-            _machine.Configure(State.Rejected)
-                .PermitIf(Trigger.Reopen, State.Reopened, () => _reopenCount < MaxReopen);
+            _stateMachine.Configure(State.Rejected)
+                .PermitIf(Trigger.Reopen, State.Reopened, () => _reopenCounter < MaxReopen);
 
-            _machine.Configure(State.Reopened)
-                .OnEntry(() => _reopenCount++)
+            _stateMachine.Configure(State.Reopened)
+                .OnEntry(() => _reopenCounter++)
                 .Permit(Trigger.StartAnalysis, State.InAnalysis);
         }
 
-        public State CurrentState => _machine.State;
+        public State CurrentState => _stateMachine.State;
 
-        public int ReopenCount => _reopenCount;
+        public int ReopenCount => _reopenCounter;
 
-        public bool CanExecute(Trigger trigger) => _machine.CanExecute(trigger);
+        public bool CanExecute(Trigger trigger) => _stateMachine.CanExecute(trigger);
 
-        public void StartAnalysis() => _machine.Fire(Trigger.StartAnalysis);
-        public void AssignToTeam() => _machine.Fire(Trigger.AssignToTeam);
-        public void MarkAsResolved() => _machine.Fire(Trigger.MarkAsResolved);
-        public void Confirm() => _machine.Fire(Trigger.Confirm);
-        public void ReStartAnalysis() => _machine.Fire(Trigger.ReStartAnalysis);
-        public void Reject() => _machine.Fire(Trigger.Reject);
-        public void Defer() => _machine.Fire(Trigger.Defer);
-        public void Resume() => _machine.Fire(Trigger.Resume);
-        public void Reopen() => _machine.Fire(Trigger.Reopen);
+        public void StartAnalysis() => _stateMachine.Fire(Trigger.StartAnalysis);
+        public void AssignToTeam() => _stateMachine.Fire(Trigger.AssignToTeam);
+        public void MarkAsResolved() => _stateMachine.Fire(Trigger.MarkAsResolved);
+        public void Confirm() => _stateMachine.Fire(Trigger.Confirm);
+        public void ReStartAnalysis() => _stateMachine.Fire(Trigger.ReStartAnalysis);
+        public void Reject() => _stateMachine.Fire(Trigger.Reject);
+        public void Defer() => _stateMachine.Fire(Trigger.Defer);
+        public void Resume() => _stateMachine.Fire(Trigger.Resume);
+        public void Reopen() => _stateMachine.Fire(Trigger.Reopen);
     }
 
     public static class Program
     {
         public static void Main()
         {
-            var bug = new Bug();
-            Console.WriteLine($"Start: {bug.CurrentState}");
+            var bugInstance = new Bug();
+            Console.WriteLine($"Start: {bugInstance.CurrentState}");
 
-            bug.StartAnalysis();
-            Console.WriteLine($"After StartAnalysis: {bug.CurrentState}");
+            bugInstance.StartAnalysis();
+            Console.WriteLine($"After StartAnalysis: {bugInstance.CurrentState}");
 
-            bug.AssignToTeam();
-            Console.WriteLine($"After AssignToTeam: {bug.CurrentState}");
+            bugInstance.AssignToTeam();
+            Console.WriteLine($"After AssignToTeam: {bugInstance.CurrentState}");
 
-            bug.MarkAsResolved();
-            Console.WriteLine($"After MarkAsResolved: {bug.CurrentState}");
+            bugInstance.MarkAsResolved();
+            Console.WriteLine($"After MarkAsResolved: {bugInstance.CurrentState}");
 
-            bug.Confirm();
-            Console.WriteLine($"After Confirm: {bug.CurrentState}");
+            bugInstance.Confirm();
+            Console.WriteLine($"After Confirm: {bugInstance.CurrentState}");
 
-            bug.Reopen();
-            Console.WriteLine($"After Reopen: {bug.CurrentState} " +
-                              $"(reopened {bug.ReopenCount} time(s))");
+            bugInstance.Reopen();
+            Console.WriteLine($"After Reopen: {bugInstance.CurrentState} " +
+                              $"(reopened {bugInstance.ReopenCount} time(s))");
 
-            bug.StartAnalysis();
-            Console.WriteLine($"After StartAnalysis: {bug.CurrentState}");
+            bugInstance.StartAnalysis();
+            Console.WriteLine($"After StartAnalysis: {bugInstance.CurrentState}");
         }
     }
 }
